@@ -1,5 +1,9 @@
 use rusqlite::{params, Connection, Result};
 use chrono::{DateTime, Utc, Local};
+use serde_json::{json, Value};
+
+
+const STR_PKEY: &str = "nango7_ai_nango_kun";
 
 #[derive(Debug)]
 struct StudyQa1 {
@@ -49,3 +53,102 @@ fn main() {
 
     // TODO 機械学習処理作成
 }
+
+
+#[derive(Debug)]
+enum ExecMode {
+    Learn,
+    Predict { que_sentence: String },
+}
+
+impl ExecMode {
+    fn new(event: Value) -> Result<ExecMode, String> {
+        let mode: &str = event["mode"].as_str().unwrap_or("");
+        let que_sentence = event["que_sentence"].as_str().unwrap_or("");
+        let pkey = event["pkey"].as_str().unwrap_or("");
+
+        if pkey.len() == 0 || pkey != STR_PKEY {
+            return Err("Not executable".to_string());
+        }
+
+        match mode {
+            "l" => {
+                Ok(ExecMode::Learn)
+            },
+            "p" => {
+                if que_sentence.len() > 0 {
+                    Ok(ExecMode::Predict { que_sentence: que_sentence.to_string() })
+                } else {
+                    Err("予測時は、質問文を入力してください。".to_string())
+                }
+            },
+            _ => {
+                Err("学習: l、予測: p を指定してください。".to_string())
+            }
+        }
+    }
+
+    fn run(self) -> Value {
+        match self {
+            ExecMode::Learn => {
+                // learn()
+            },
+            ExecMode::Predict { que_sentence } => {
+                // predict(que_sentence)
+            },
+        }
+
+    }
+}
+
+
+// fn learn() -> Value {
+//     let qa_data: QaData = read_csv().unwrap_or_else(|err| {
+//         println!("error running read: {}", err);
+//         std::process::exit(1);
+//     });
+
+//     let mut docs: Vec<Vec<String>> = Vec::new();
+//     for input_qa in qa_data.que_vec {
+//         let doc_vec: Vec<String> = get_tokenizer(input_qa);
+//         docs.push(doc_vec);
+//     }
+
+//     out_csv_word(&docs).unwrap_or_else(|err| {
+//         println!("error running out_csv_word csv: {}", err);
+//         std::process::exit(1);
+//     });
+
+//     let tf_idf_res = tf_idf::TfIdf::get_tf_idf(&docs);
+//     // 学習済みモデル出力
+//     out_csv(tf_idf_res).unwrap_or_else(|err| {
+//         println!("error running output csv: {}", err);
+//         std::process::exit(1);
+//     });
+
+//     let res_json: Value = json!({
+//         "code": 200,
+//         "success": true,
+//         "mode": "learn",
+//     });
+//     res_json
+// }
+
+// fn predict(que_sentence: String) -> Value {
+//     let qa_data: QaData = read_csv().unwrap_or_else(|err| {
+//         println!("error running read: {}", err);
+//         std::process::exit(1);
+//     });
+
+//     let docs: Vec<Vec<String>> = read_word_list_csv().unwrap_or_else(|err| {
+//         println!("error running read: {}", err);
+//         std::process::exit(1);
+//     });
+
+//     let tfidf: tf_idf::TfIdf = read_model_csv().unwrap();
+//     let trg: Vec<String> = get_tokenizer(que_sentence.to_owned());
+//     let ans_vec: Vec<(usize, f64)> = tf_idf::TfIdf::predict(tfidf, &docs, &trg);
+
+//     let res_json: Value = make_json(que_sentence, qa_data, ans_vec);
+//     res_json
+// }

@@ -74,6 +74,10 @@ sqlite3 ai_db.db
 .headers on
 ```
 
+### curl
+```
+curl -G -d mode=p -d pkey=nango7_ai_nango_kun --data-urlencode que_sentence=ドリンクはなにがありますか？ https://g2l6vmjobj.execute-api.ap-northeast-1.amazonaws.com/nango_ai_220717 | jq
+```
 
 ### その他
 1. apt install python-pip python3-pip  
