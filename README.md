@@ -72,6 +72,9 @@ sudo apt install sqlite3
 sudo apt install libsqlite3-dev
 sqlite3 ai_db.db
 .headers on
+sqlite> .tables
+output_model      output_word_list  study_qa1       
+sqlite> select * from output_word_list;
 ```
 
 ### curl

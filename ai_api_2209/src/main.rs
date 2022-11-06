@@ -122,15 +122,15 @@ fn learn() -> Value {
         docs.push(doc_vec);
     }
 
-    // TODO 分かち書き等をDB登録
-    out_csv_word(&docs).unwrap_or_else(|err| {
+    // TODO 次  わかち書き等をDB登録
+    out_db_words(&con, &docs).unwrap_or_else(|err| {
         println!("error running out_csv_word csv: {}", err);
         std::process::exit(1);
     });
 
     let tf_idf_res = tf_idf::TfIdf::get_tf_idf(&docs);
     // 学習済みモデル出力
-    out_csv(tf_idf_res).unwrap_or_else(|err| {
+    out_db_model(&con, tf_idf_res).unwrap_or_else(|err| {
         println!("error running output csv: {}", err);
         std::process::exit(1);
     });
@@ -315,44 +315,87 @@ fn read_model_csv() -> Result<tf_idf::TfIdf, Box<dyn OtherError>> {
     Ok(tfidf)
 }
 
-/// csv出力
-/// https://qiita.com/algebroid/items/c456d4ec555ae04c7f92
-fn out_csv(tf_idf_res: tf_idf::TfIdf) -> Result<(), Box<dyn OtherError>> {
-    let csv_file_out_path = "output/model_qa1.csv";
-    let mut wtr = csv::WriterBuilder::new()
-        .quote_style(csv::QuoteStyle::Always)
-        .from_path(csv_file_out_path)?;
+fn out_db_model(con:&Connection, tf_idf_res: tf_idf::TfIdf) -> Result<usize, Box<dyn OtherError>> {
+    // テーブルの初期化
+    con.execute("Delete from output_model", ())?;
 
-    let mut w_vec = vec!["id"];
-    let mut w_add_vec: Vec<&str> = tf_idf_res.word_vec.iter().map(|s| s.as_str()).collect();
-    w_vec.append(&mut w_add_vec);
-    wtr.write_record(&w_vec)?;
+    let mut ret = 0;
+    let words: String = tf_idf_res.word_vec.iter().map(|s| s.to_string()).collect::<Vec<String>>().join(",");
+    let dt_now = Local::now();
 
-    for (index, tf_idf_vec) in tf_idf_res.tf_idf_vec.iter().enumerate() {
-        let mut s_vec: Vec<String> = vec![index.to_string()];
-        let mut s_add_vec: Vec<String> = tf_idf_vec.iter().map(|s| s.to_string()).collect();
-        s_vec.append(&mut s_add_vec);
-        wtr.write_record(s_vec)?;
+    // 分割した単語のレコード
+    ret += con.execute(
+        "insert into output_model (vals, ins_date, update_date) values (?1, ?2,?3)",
+        params![words, dt_now, dt_now]
+    ).unwrap_or(0);
+
+    // tf-idf値のレコード
+    for tf_idf_vec in tf_idf_res.tf_idf_vec {
+        let mut vals: String = tf_idf_vec.iter().map(|s| s.to_string()).collect::<Vec<String>>().join(",");
+        ret += con.execute(
+            "insert into output_model (vals, ins_date, update_date) values (?1, ?2,?3)",
+            params![vals, dt_now, dt_now]
+        ).unwrap_or(0);
     }
-
-    wtr.flush()?;
-    Ok(())
+    Ok(ret)
 }
 
-fn out_csv_word(docs: &Vec<Vec<String>>) -> Result<(), Box<dyn OtherError>> {
-    let csv_file_out_path = "output/word_list.csv";
-    let mut wtr = csv::WriterBuilder::new()
-        .quote_style(csv::QuoteStyle::Always)
-        .flexible(true) // 可変長で書き込み
-        .from_path(csv_file_out_path)?;
 
+/// csv出力
+/// https://qiita.com/algebroid/items/c456d4ec555ae04c7f92
+// fn out_csv(tf_idf_res: tf_idf::TfIdf) -> Result<(), Box<dyn OtherError>> {
+//     let csv_file_out_path = "output/model_qa1.csv";
+//     let mut wtr = csv::WriterBuilder::new()
+//         .quote_style(csv::QuoteStyle::Always)
+//         .from_path(csv_file_out_path)?;
+
+//     let mut w_vec = vec!["id"];
+//     let mut w_add_vec: Vec<&str> = tf_idf_res.word_vec.iter().map(|s| s.as_str()).collect();
+//     w_vec.append(&mut w_add_vec);
+//     wtr.write_record(&w_vec)?;
+
+//     for (index, tf_idf_vec) in tf_idf_res.tf_idf_vec.iter().enumerate() {
+//         let mut s_vec: Vec<String> = vec![index.to_string()];
+//         let mut s_add_vec: Vec<String> = tf_idf_vec.iter().map(|s| s.to_string()).collect();
+//         s_vec.append(&mut s_add_vec);
+//         wtr.write_record(s_vec)?;
+//     }
+
+//     wtr.flush()?;
+//     Ok(())
+// }
+
+// fn out_csv_word(docs: &Vec<Vec<String>>) -> Result<(), Box<dyn OtherError>> {
+//     let csv_file_out_path = "output/word_list.csv";
+//     let mut wtr = csv::WriterBuilder::new()
+//         .quote_style(csv::QuoteStyle::Always)
+//         .flexible(true) // 可変長で書き込み
+//         .from_path(csv_file_out_path)?;
+
+//     for doc in docs {
+//         let s_vec: Vec<String> = doc.iter().map(|s| s.to_string()).collect();
+//         wtr.write_record(s_vec)?;
+//     }
+
+//     wtr.flush()?;
+//     Ok(())
+// }
+
+fn out_db_words(con:&Connection, docs: &Vec<Vec<String>>) -> Result<usize, Box<dyn OtherError>> {
+    // テーブルの初期化
+    con.execute("Delete from output_word_list", ())?;
+
+    let mut ret = 0;
     for doc in docs {
-        let s_vec: Vec<String> = doc.iter().map(|s| s.to_string()).collect();
-        wtr.write_record(s_vec)?;
-    }
+        let words: String = doc.iter().map(|s| s.to_string()).collect::<Vec<String>>().join(",");
+        let dt_now = Local::now();
 
-    wtr.flush()?;
-    Ok(())
+        ret += con.execute(
+            "insert into output_word_list (words, ins_date, update_date) values (?1, ?2,?3)",
+            params![words, dt_now, dt_now]
+        ).unwrap_or(0);
+    }
+    Ok(ret)
 }
 
 #[cfg(test)]
